@@ -80,7 +80,6 @@ void IRAM_ATTR IntOne()
 void setup()
 {
   Serial.begin(1000000);
-  Serial.println("Hello");
 
   for (int i = 0; i < NumOfSensors; i++)
   {
@@ -88,6 +87,11 @@ void setup()
   }
 
   if ( mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM_CAP_0, SensorPin[0]) != ESP_OK)
+  {
+    Serial.println("Fail to init");
+  }
+  
+  if ( mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM_CAP_1, SensorPin[1]) != ESP_OK)
   {
     Serial.println("Fail to init");
   }
@@ -99,9 +103,15 @@ void setup()
     Serial.println("Fail to enable");
   }
   else Serial.println("Enable Success!");
+    if (mcpwm_capture_enable(MCPWM_UNIT_0, MCPWM_SELECT_CAP1, MCPWM_POS_EDGE, 0) != ESP_OK)
+  {
+    Serial.println("Fail to enable");
+  }
+  else Serial.println("Enable Success!");
+  
 
   attachInterrupt(SensorPin[0], IntZero, CHANGE);
-  attachInterrupt(SensorPin[1], IntOne, RISING);
+  //attachInterrupt(SensorPin[1], IntOne, RISING);
 
   delay(2000);
 }
@@ -126,12 +136,12 @@ void loop()
     if (waiting4Pulse)
     {
       sensor = 1;
-      angle[sensor][syncAxis] = ((((temp - previous) * 0.0125) - 4000.0) * PI) / 8333.0;
-      Serial.print("Sensor Flag      ");
+      angle[sensor][syncAxis] = ((((temp1 - previous1) * 0.0125) - 4000.0) * PI) / 8333.0;
+      Serial.print("Sensor ");
       Serial.print(sensor);
       Serial.print(": ");
-      if (syncAxis == XAXIS) Serial.print("X ");
-      else Serial.print("Y ");
+      if (syncAxis == XAXIS) Serial.print("X ");  // Result seems to be garbage!
+      else Serial.print("Y "); // Seems Ok
       Serial.println(angle[sensor][syncAxis], 4);
       waiting4Pulse--; // We have received one of the 
     }
@@ -152,26 +162,38 @@ void loop()
       syncAxis = (int)(answer + 0.5) & 1;
       syncData = ((int)(answer + 0.5) & 2) >> 1;
       syncSkip = ((int)(answer + 0.5) & 4) >> 2;
-      if (!syncSkip) waiting4Pulse = NumOfSensors;
-      else waiting4Pulse = false;
+      if (!syncSkip) 
+      {
+        attachInterrupt(SensorPin[1], IntOne, RISING);
+        waiting4Pulse = NumOfSensors;
+      }
+      else 
+      {
+        detachInterrupt(SensorPin[1]);
+        waiting4Pulse = false;
+      }
     }
 
     // TIME PULSE
     else if ((uint32_t)highInterval < syncMin) // Valid time
     {
       sensor = 0;
-      angle[sensor][syncAxis] = ((((temp1 - previous1) * 0.0125) - 4000.0) * PI) / 8333.0;
-      Serial.print("Sensor triggered ");
+      angle[sensor][syncAxis] = ((((temp - previous) * 0.0125) - 4000.0) * PI) / 8333.0;
+      Serial.print("Sensor ");
       Serial.print(sensor);
       Serial.print(": ");
-      if (syncAxis == XAXIS) Serial.print("X ");
-      else Serial.print("Y ");
+      if (syncAxis == XAXIS) Serial.print("X ");  // This is working (I think)!
+      else Serial.print("Y ");  // and this is working (I think)!
       Serial.println(angle[sensor][syncAxis], 4);
       waiting4Pulse--; // We have received one of the 
     }
 
     // NOT A VALID PULSE
-    else waiting4Pulse = false;
+    else 
+    {
+      detachInterrupt(SensorPin[1]);//, IntOne, RISING);
+      waiting4Pulse = false;
+    }
   }
 
 
