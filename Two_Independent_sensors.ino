@@ -52,13 +52,15 @@ bool triggered[NumOfSensors];
 
 static mcpwm_dev_t *MCPWM[2] = {&MCPWM0, &MCPWM1};
 
-static mcpwm_capture_signal_t CAP[2] = {MCPWM_SELECT_CAP0,MCPWM_SELECT_CAP1};
+static mcpwm_capture_signal_t CAP[2] = {MCPWM_SELECT_CAP0, MCPWM_SELECT_CAP1};
 
 const uint32_t syncMin = 61;    // Shortest high level for a sync pules
 const uint32_t syncMax = 136;   // Longest high level for a sync pulse
 
 uint32_t timerValueLow;
 uint32_t timerValueHigh;
+
+
 
 void ISR(int sensor)
 {
@@ -127,84 +129,57 @@ void setup()
 
 void loop()
 {
-  //int sensor = 1;
-
-  if (flag[sensor])
+  for (int i = 0; i < NumOfSensors; i++)
   {
-    flag[sensor] = false;
-    previous[sensor] = temp[sensor];
-    temp[sensor] = (mcpwm_capture_signal_get_value(MCPWM_UNIT_0, MCPWM_SELECT_CAP0));//CAP[sensor]));
-  }
-
-//  if (Sensor1Flag[sensor])
-//  {
-//    Sensor1Flag[sensor] = 0;
-//    previous1 = temp1;
-//    temp1 = (mcpwm_capture_signal_get_value(MCPWM_UNIT_0, MCPWM_SELECT_CAP1));
-//
-//    if (waiting4Pulse)
-//    {
-//      sensor = 1;
-//      angle[sensor][syncAxis] = ((((temp1 - previous1) * 0.0125) - 4000.0) * PI) / 8333.0;
-//      Serial.print("Sensor ");
-//      Serial.print(sensor);
-//      Serial.print(": ");
-//      if (syncAxis == XAXIS) Serial.print("X ");  // Result seems to be garbage!
-//      else Serial.print("Y "); // Seems Ok
-//      Serial.println(angle[sensor][syncAxis], 4);
-//      waiting4Pulse--; // We have received one of the
-//    }
-//
-//  }
-
-
-
-  if (triggered[sensor])
-  {
-    triggered[sensor] = 0;
-
-    // SYNC PULSE
-    if ( ((uint32_t)highInterval[sensor] > syncMin) && ((uint32_t)highInterval[sensor] <= syncMax) )//61 -> 136
+    if (flag[i])
     {
-      answer[sensor] = ((highInterval[sensor] - 62) / 10.4);
+      flag[i] = false;
+      previous[i] = temp[i];
+      //temp[i] = (mcpwm_capture_signal_get_value(MCPWM_UNIT_0, MCPWM_SELECT_CAP0));//CAP[sensor]));
+      temp[i] = (mcpwm_capture_signal_get_value(MCPWM_UNIT_0, CAP[i]));
+    }
 
-      syncAxis[sensor] = (int)(answer[sensor] + 0.5) & 1;
-      syncData[sensor] = ((int)(answer[sensor] + 0.5) & 2) >> 1;
-      syncSkip[sensor] = ((int)(answer[sensor] + 0.5) & 4) >> 2;
-      if (!syncSkip[sensor])
+    if (triggered[i])
+    {
+      triggered[i] = 0;
+
+      // SYNC PULSE
+      if ( ((uint32_t)highInterval[i] > syncMin) && ((uint32_t)highInterval[i] <= syncMax) )//61 -> 136
       {
-        //attachInterrupt(SensorPin[1], IntOne, RISING);
-        waiting4Pulse[sensor] = true;// NumOfSensors;
+        // TO DO this needs work as syncaxis seems to get mixed up
+        answer[i] = ((highInterval[i] - 62) / 10.4);
+        syncAxis[i] = (int)(answer[i] + 0.5) & 1; // +0.5 to round up
+        syncData[i] = ((int)(answer[i] + 0.5) & 2) >> 1;
+        syncSkip[i] = ((int)(answer[i] + 0.5) & 4) >> 2;
       }
-      else
+
+      // TIME PULSE
+      else if ((uint32_t)highInterval[i] < syncMin) // Valid time
       {
-        //detachInterrupt(SensorPin[1]);
-        waiting4Pulse[sensor] = false;
+        float tempTime = ((temp[i] - previous[i]) * 0.0125) - 4000;
+        //if(tempTime < 4000) tempTime = 4000;
+        //tempTime = tempTime - 4000;
+
+        //angle[sensor][syncAxis[sensor]] = ((((temp[sensor] - previous[sensor]) * 0.0125) - 4000.0) * PI) / 8333.0;
+        if (tempTime > -3500 && tempTime < 3500) // Check if valid data
+        {
+          angle[i][syncAxis[i]] = tempTime;
+        }
+
       }
     }
-
-    // TIME PULSE
-    else if ((uint32_t)highInterval[sensor] < syncMin) // Valid time
-    {
-      //sensor = 0;
-      //angle[sensor][syncAxis[sensor]] = ((((temp[sensor] - previous[sensor]) * 0.0125) - 4000.0) * PI) / 8333.0;
-      angle[sensor][syncAxis[sensor]] = (((temp[sensor] - previous[sensor]) * 0.0125) - 4000.0);
-      //Serial.print("Sensor ");
-      //Serial.print(sensor);
-      //Serial.print(": ");
-      if (syncAxis[sensor] == XAXIS)Serial.println(angle[0][syncAxis[0]], 4); //Serial.print("X ");  // This is working (I think)!
-      //else Serial.print("Y ");  // and this is working (I think)!
-      //Serial.println(angle[sensor][syncAxis[sensor]], 4);
-      waiting4Pulse[sensor]--; // We have received one of the
-    }
-
-    // NOT A VALID PULSE
-    else
-    {
-      //detachInterrupt(SensorPin[1]);//, IntOne, RISING);
-      waiting4Pulse[sensor] = false;
-    }
   }
-
-
+  //int j = 0;
+  for (int j = 0; j < NumOfSensors; j++)
+  {
+    Serial.print(angle[j][XAXIS]);
+    Serial.print(" ");
+    Serial.print(angle[j][YAXIS]);
+    Serial.print(" ");
+  }
+  //Serial.print(" ");
+  Serial.print(-4000);
+  Serial.print(" ");
+  Serial.print(4000);
+  Serial.println();
 }
